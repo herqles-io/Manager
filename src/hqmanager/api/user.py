@@ -25,15 +25,15 @@ class UserAPIController(object):
         if 'password' not in data:
             raise cherrypy.HTTPError(400, "Missing Password")
 
-        output = {data['username']: 'created'}
+        output = {data['username']: True, 'identity': False, 'assignment': False}
 
         if not self.identity.user_exists(data['username']):
             self.identity.create_user(data['username'], data['password'])
-            output['identity'] = 'created'
+            output['identity'] = True
 
         if not self.assignment.has_assignment(data['username']):
             self.assignment.create_assignment(data['username'])
-            output['assignment'] = 'created'
+            output['assignment'] = True
 
         return output
 
