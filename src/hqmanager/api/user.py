@@ -71,7 +71,7 @@ class UserAPIController(object):
         data = cherrypy.request.json
 
         if 'username' not in data or 'password' not in data:
-            raise cherrypy.HTTPError(404, "Username and password required")
+            raise cherrypy.HTTPError(400, "Username and password required")
 
         if not self.identity.auth(data['username'], data['password']):
             raise cherrypy.HTTPError(401, "Invalid username or password")
