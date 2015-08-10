@@ -22,7 +22,7 @@ class IdentityAbstractDriver(object):
 
     @abstractmethod
     def delete_user(self, username):
-        pass
+        return False
 
     @abstractmethod
     def auth(self, username, password):

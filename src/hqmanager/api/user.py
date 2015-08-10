@@ -57,13 +57,17 @@ class UserAPIController(object):
     @cherrypy.tools.auth(permission="herqles.user.delete")
     def delete(self, username):
 
+        output = {username: True, 'identity': False, 'assignment': False}
+
+        if not self.identity.user_exists(username):
+            self.identity.delete_user(username)
+            output['identity'] = True
+
         if not self.assignment.has_assignment(username):
-            raise cherrypy.HTTPError(404, "User does not exist")
+            self.assignment.delete_assignment(username)
+            output['assignment'] = True
 
-        self.identity.delete_user(username)
-        self.assignment.delete_assignment(username)
-
-        return {username: "deleted"}
+        return output
 
     @cherrypy.tools.json_out()
     @cherrypy.tools.json_in()
