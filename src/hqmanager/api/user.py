@@ -25,7 +25,7 @@ class UserAPIController(object):
         if 'password' not in data:
             raise cherrypy.HTTPError(400, "Missing Password")
 
-        output = {data['username']: True, 'identity': False, 'assignment': False}
+        output = {'username': data['username'], 'identity': False, 'assignment': False}
 
         if not self.identity.user_exists(data['username']):
             self.identity.create_user(data['username'], data['password'])
@@ -45,7 +45,7 @@ class UserAPIController(object):
         if not self.assignment.has_assignment(username):
             raise cherrypy.HTTPError(404, "User does not exist")
 
-        if username != self.assignment.get_username_from_token(headers['X-Auth-Token']):
+        if username != cherrypy.request.user['name']:
             if not self.assignment.has_permission_token(headers['X-Auth-Token'], 'herqles.user.get'):
                 raise cherrypy.HTTPError(403, "Invalid permissions")
 
@@ -57,7 +57,7 @@ class UserAPIController(object):
     @cherrypy.tools.auth(permission="herqles.user.delete")
     def delete(self, username):
 
-        output = {username: True, 'identity': False, 'assignment': False}
+        output = {'username': username, 'identity': False, 'assignment': False}
 
         if not self.identity.user_exists(username):
             self.identity.delete_user(username)
@@ -93,25 +93,20 @@ class UserAPIController(object):
         headers = cherrypy.request.headers
         data = cherrypy.request.json
 
-        if 'username' in data:
-            if not self.assignment.has_permission_token(headers['X-Auth-Token'], 'herqles.user.password'):
-                raise cherrypy.HTTPError(403, "Invalid permissions")
-
-            username = data['username']
-
-            if not self.assignment.has_assignment(username):
-                raise cherrypy.HTTPError(404, "User does not exist")
-        else:
-            username = self.assignment.get_username_from_token(headers['X-Auth-Token'])
+        if 'username' not in data:
+            raise cherrypy.HTTPError(400, "Missing username")
 
         if 'password' not in data:
             raise cherrypy.HTTPError(400, "Missing password")
 
-        self.identity.change_password(username, data['password'])
+        if data['username'] != cherrypy.request.user['name']:
+            if not self.assignment.has_permission_token(headers['X-Auth-Token'], 'herqles.user.password'):
+                raise cherrypy.HTTPError(403, "Invalid permissions")
 
-        self.assignment.get_token(username, force=True)
+        self.identity.change_password(data['username'], data['password'])
+        self.assignment.get_token(data['username'], force=True)
 
-        return {username: "password and token updated"}
+        return {'username': data['username']}
 
     @cherrypy.tools.json_in()
     @cherrypy.tools.json_out()
@@ -125,11 +120,11 @@ class UserAPIController(object):
             raise cherrypy.HTTPError(404, "User does not exist")
 
         if self.assignment.has_permission_user(username, permission):
-            raise cherrypy.HTTPError(400, "User already has permission "+permission)
+            raise cherrypy.HTTPError(409, "User already has permission "+permission)
 
         self.assignment.add_permission(username, permission)
 
-        return {"username": username, permission: "added"}
+        return data
 
     @cherrypy.tools.json_in()
     @cherrypy.tools.json_out()
@@ -143,6 +138,6 @@ class UserAPIController(object):
             raise cherrypy.HTTPError(404, "User does not exist")
 
         if self.assignment.has_permission_user(username, permission, exact=True) is False:
-            raise cherrypy.HTTPError(400, "User does not have pemrission "+permission)
+            raise cherrypy.HTTPError(409, "User does not have permission "+permission)
 
-        return {"username": username, permission: "deleted"}
+        return data
