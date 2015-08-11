@@ -19,7 +19,7 @@ class AssignmentDriver(hqmanager.assignment.sql_driver.AssignmentDriver):
         self.ldap = None
 
     def db_connections(self, **kwargs):
-        if 'sql' not in kwargs:
+        if 'database' not in kwargs:
             raise AssignmentMissingDBConnectionException("Missing sql connection")
 
         if 'ldap' not in kwargs:

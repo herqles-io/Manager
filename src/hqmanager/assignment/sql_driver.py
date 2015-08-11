@@ -21,7 +21,7 @@ class AssignmentDriver(AssignmentAbstractDriver):
         self.database = None
 
     def db_connections(self, **kwargs):
-        if 'sql' not in kwargs:
+        if 'database' not in kwargs:
             raise AssignmentMissingDBConnectionException("Missing sql connection")
 
         self.database = kwargs['database']

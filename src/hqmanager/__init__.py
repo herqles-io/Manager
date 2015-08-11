@@ -139,7 +139,7 @@ class ManagerDaemon(Daemon):
             self.logger.error("Error validating identity config")
             return False
 
-        identity.db_connections(sql=database, rabbitmq=self.rabbitmq, ldap=ldap)
+        identity.db_connections(database=database, rabbitmq=self.rabbitmq, ldap=ldap)
 
         if 'driver' not in self.base_config.assignment:
             self.logger.error("Assignment Config does not have a driver set")
@@ -157,7 +157,7 @@ class ManagerDaemon(Daemon):
             self.logger.error("Error validating assignment config")
             return False
 
-        assignment.db_connections(sql=database, rabbitmq=self.rabbitmq, ldap=ldap)
+        assignment.db_connections(database=database, rabbitmq=self.rabbitmq, ldap=ldap)
 
         RegisterFrameworkSubscriber(self.rabbitmq).start()
         TaskStatusSubscriber(self.rabbitmq, database).start()
