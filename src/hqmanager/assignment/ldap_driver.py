@@ -9,25 +9,32 @@ from schematics.types.compound import DictType, ListType
 
 import hqmanager.assignment.sql_driver
 from hqlib.sql.models import UserAssignment
-from hqlib.ldap_db import LDAP
-from hqlib.sql import SQLDB
-from hqmanager.config import SQLConfig, LDAPConfig
-
+from hqmanager.assignment.driver import AssignmentMissingDBConnectionException
 
 class AssignmentDriver(hqmanager.assignment.sql_driver.AssignmentDriver):
     def __init__(self):
         super(AssignmentDriver, self).__init__()
         self.logger = logging.getLogger("hq.manager.assignment.ldap")
-        self.ldap_config = None
         self.database = None
         self.ldap = None
+
+    def db_connections(self, **kwargs):
+        if 'sql' not in kwargs:
+            raise AssignmentMissingDBConnectionException("Missing sql connection")
+
+        if 'ldap' not in kwargs:
+            raise AssignmentMissingDBConnectionException("Missing ldap connection")
+
+        if kwargs['ldap'] is None:
+            raise AssignmentMissingDBConnectionException("Missing ldap connection is None")
+
+        self.database = kwargs['database']
+        self.ldap = kwargs['ldap']
 
     def validate_config(self, config):
 
         class ConfigValidator(Model):
             mapping = DictType(ListType(StringType()), required=True)
-            ldap = DictType(StringType(), required=True)
-            sql = DictType(StringType(), required=True)
 
         try:
             self.config = ConfigValidator(config, strict=False)
@@ -40,36 +47,6 @@ class AssignmentDriver(hqmanager.assignment.sql_driver.AssignmentDriver):
         except ModelValidationError as e:
             self.logger.error("Could not validate config for assignment LDAP driver " + json.dumps(e.message))
             return False
-
-        try:
-            self.ldap_config = LDAPConfig(self.config.ldap, strict=False)
-        except ModelConversionError as e:
-            self.logger.error("Could not create ldap config for assignment LDAP driver " + json.dumps(e.message))
-            return False
-
-        try:
-            self.ldap_config.validate()
-        except ModelValidationError as e:
-            self.logger.error("Could not validate ldap config for assignment LDAP driver " + json.dumps(e.message))
-            return False
-
-        self.ldap = LDAP(self.ldap_config.host, self.ldap_config.domain, self.ldap_config.base_dn)
-
-        try:
-            self.sql_config = SQLConfig(self.config.sql, strict=False)
-        except ModelConversionError as e:
-            self.logger.error("Could not create sql config for assignment LDAP driver " + json.dumps(e.message))
-            return False
-
-        try:
-            self.sql_config.validate()
-        except ModelValidationError as e:
-            self.logger.error("Could not validate sql config for assignment LDAP driver " + json.dumps(e.message))
-            return False
-
-        self.database = SQLDB(self.sql_config.driver, self.sql_config.host, self.sql_config.port,
-                              self.sql_config.database, self.sql_config.username, self.sql_config.password, 1)
-        self.database.connect()
 
         return True
 
@@ -88,11 +65,11 @@ class AssignmentDriver(hqmanager.assignment.sql_driver.AssignmentDriver):
 
     # only create assignment if user is in LDAP
     def create_assignment(self, username):
-        connection = self.ldap.connection_as(self.ldap_config.bind_username, self.ldap_config.bind_password)
+        connection = self.ldap.connection_as(self.ldap.bind_username, self.ldap.bind_password)
 
         criteria = "(&(samaccountname=" + username + "))"
         attributes = ['displayName']
-        result = connection.search_s(self.ldap_config.base_dn, ldap_module.SCOPE_SUBTREE, criteria, attributes)[0][0]
+        result = connection.search_s(self.ldap.base_dn, ldap_module.SCOPE_SUBTREE, criteria, attributes)[0][0]
         connection.unbind()
 
         if result is None:
@@ -146,16 +123,16 @@ class AssignmentDriver(hqmanager.assignment.sql_driver.AssignmentDriver):
 
         permissions = []
 
-        connection = self.ldap.connection_as(self.ldap_config.bind_username, self.ldap_config.bind_password)
+        connection = self.ldap.connection_as(self.ldap.bind_username, self.ldap.bind_password)
 
         criteria = "(&(samaccountname=" + username + "))"
         attributes = ['memberOf']
-        result = connection.search_s(self.ldap_config.base_dn, ldap_module.SCOPE_SUBTREE, criteria,
+        result = connection.search_s(self.ldap.base_dn, ldap_module.SCOPE_SUBTREE, criteria,
                                      attributes)[0][1]['memberOf']
         connection.unbind()
 
         for group in result:
-            group = group.replace(self.ldap_config.base_dn, "")[:-1]
+            group = group.replace(self.ldap.base_dn, "")[:-1]
             if group not in self.config.mapping:
                 continue
             else:

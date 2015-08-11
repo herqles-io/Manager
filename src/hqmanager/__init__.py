@@ -12,16 +12,17 @@ from hqmanager.messaging import *
 import hqmanager.api
 from hqmanager.config import parse_config, BaseConfig, RabbitMQConfig, SQLConfig, PathConfig, LDAPConfig
 from hqlib.daemon import Daemon
+from hqlib.ldap_db import LDAP
 
 
 class ManagerDaemon(Daemon):
-
     def __init__(self, args):
         super(ManagerDaemon, self).__init__("Manager")
         self.args = args
         self.base_config = None
         self.path_config = None
         self.sql_config = None
+        self.ldap_config = None
         self.rabbitmq_config = None
         self.rabbitmq = None
 
@@ -72,6 +73,19 @@ class ManagerDaemon(Daemon):
             self.logger.error("Could not validate sql config " + json.dumps(e.message))
             return False
 
+        if self.base_config.ldap is not None:
+            try:
+                self.ldap_config = LDAPConfig(self.base_config.ldap, strict=False)
+            except ModelConversionError as e:
+                self.logger.error("Could not create ldap config " + json.dumps(e.message))
+                return False
+
+            try:
+                self.ldap_config.validate()
+            except ModelValidationError as e:
+                self.logger.error("Could not validate ldap config " + json.dumps(e.message))
+                return False
+
         try:
             self.rabbitmq_config = RabbitMQConfig(self.base_config.rabbitmq, strict=False)
         except ModelConversionError as e:
@@ -94,6 +108,12 @@ class ManagerDaemon(Daemon):
         with database.session() as session:
             Base.metadata.create_all(bind=session.get_bind())
 
+        ldap = None
+
+        if self.ldap_config is not None:
+            ldap = LDAP(self.ldap_config.host, self.ldap_config.domain, self.ldap_config.base_dn,
+                        self.ldap_config.bind_username, self.ldap_config.bind_password)
+
         hosts = []
         for host in self.rabbitmq_config.hosts:
             (ip, port) = host.split(":")
@@ -115,11 +135,11 @@ class ManagerDaemon(Daemon):
         identity = getattr(module, 'IdentityDriver')
         identity = identity()
 
-        self.base_config.identity['sql'] = self.base_config.sql
-        self.base_config.identity['ldap'] = self.base_config.ldap
         if not identity.validate_config(self.base_config.identity):
             self.logger.error("Error validating identity config")
             return False
+
+        identity.db_connections(sql=database, rabbitmq=self.rabbitmq, ldap=ldap)
 
         if 'driver' not in self.base_config.assignment:
             self.logger.error("Assignment Config does not have a driver set")
@@ -133,11 +153,11 @@ class ManagerDaemon(Daemon):
         assignment = getattr(module, 'AssignmentDriver')
         assignment = assignment()
 
-        self.base_config.assignment['sql'] = self.base_config.sql
-        self.base_config.assignment['ldap'] = self.base_config.ldap
         if not assignment.validate_config(self.base_config.assignment):
             self.logger.error("Error validating assignment config")
             return False
+
+        assignment.db_connections(sql=database, rabbitmq=self.rabbitmq, ldap=ldap)
 
         RegisterFrameworkSubscriber(self.rabbitmq).start()
         TaskStatusSubscriber(self.rabbitmq, database).start()

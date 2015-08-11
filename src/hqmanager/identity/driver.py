@@ -31,3 +31,8 @@ class IdentityAbstractDriver(object):
     @abstractmethod
     def user_exists(self, username):
         return False
+
+class IdentityMissingDBConnectionException(Exception):
+
+    def __init__(self, message):
+        super(IdentityMissingDBConnectionException, self).__init__(message)

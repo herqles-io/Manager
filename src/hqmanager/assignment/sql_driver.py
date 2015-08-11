@@ -9,27 +9,27 @@ from schematics.exceptions import ModelValidationError, ModelConversionError
 from schematics.models import Model
 from schematics.types import StringType
 
-from schematics.types.compound import DictType
-
 from hqlib.sql.models import UserAssignment, Token, Permission
-from hqmanager.assignment.driver import AssignmentAbstractDriver
+from hqmanager.assignment.driver import AssignmentAbstractDriver, AssignmentMissingDBConnectionException
 from hqmanager import unix_time_millis
-from hqlib.sql import SQLDB
-from hqmanager.config import SQLConfig
 
 
 class AssignmentDriver(AssignmentAbstractDriver):
     def __init__(self):
         super(AssignmentDriver, self).__init__()
         self.logger = logging.getLogger("hq.manager.assignment.sql")
-        self.sql_config = None
         self.database = None
+
+    def db_connections(self, **kwargs):
+        if 'sql' not in kwargs:
+            raise AssignmentMissingDBConnectionException("Missing sql connection")
+
+        self.database = kwargs['database']
 
     def validate_config(self, config):
 
         class ConfigValidator(Model):
-            admin_username = StringType(required=True)  # TODO: automatically create assignment for this user
-            sql = DictType(StringType(), required=True)
+            admin_username = StringType(required=True)
 
         try:
             self.config = ConfigValidator(config, strict=False)
@@ -42,22 +42,6 @@ class AssignmentDriver(AssignmentAbstractDriver):
         except ModelValidationError as e:
             self.logger.error("Could not validate config for assignment SQL driver " + json.dumps(e.message))
             return False
-
-        try:
-            self.sql_config = SQLConfig(self.config.sql, strict=False)
-        except ModelConversionError as e:
-            self.logger.error("Could not create sql config for assignment SQL driver " + json.dumps(e.message))
-            return False
-
-        try:
-            self.sql_config.validate()
-        except ModelValidationError as e:
-            self.logger.error("Could not validate sql config for assignment SQL driver " + json.dumps(e.message))
-            return False
-
-        self.database = SQLDB(self.sql_config.driver, self.sql_config.host, self.sql_config.port,
-                              self.sql_config.database, self.sql_config.username, self.sql_config.password, 1)
-        self.database.connect()
 
         if not self.has_assignment(self.config.admin_username):
             self.create_assignment(self.config.admin_username)
@@ -161,6 +145,8 @@ class AssignmentDriver(AssignmentAbstractDriver):
 
             for perm in assignment.permissions:
                 permissions.append(perm.permission)
+        assignment.permissions.append(perm)
+        session.commit()
 
         return permissions
 
@@ -180,5 +166,3 @@ class AssignmentDriver(AssignmentAbstractDriver):
         with self.database.session() as session:
             assignment = session.query(UserAssignment).filter(UserAssignment.username == username).first()
             perm = Permission(permission=permission)
-            assignment.permissions.append(perm)
-            session.commit()

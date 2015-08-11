@@ -37,11 +37,11 @@ class SQLConfig(Model):
 
 
 class LDAPConfig(Model):
-    host = StringType()
-    domain = StringType()
-    base_dn = StringType()
-    bind_username = StringType()
-    bind_password = StringType()
+    host = StringType(required=True)
+    domain = StringType(required=True)
+    base_dn = StringType(required=True)
+    bind_username = StringType(required=True)
+    bind_password = StringType(required=True)
 
 
 class PathConfig(Model):

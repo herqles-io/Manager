@@ -9,6 +9,10 @@ class AssignmentAbstractDriver(object):
         self.config = None
 
     @abstractmethod
+    def db_connections(self, **kwargs):
+        pass
+
+    @abstractmethod
     def validate_config(self, config):
         return False
 
@@ -59,3 +63,9 @@ class AssignmentAbstractDriver(object):
     @abstractmethod
     def has_assignment(self, username):
         pass
+
+
+class AssignmentMissingDBConnectionException(Exception):
+
+    def __init__(self, message):
+        super(AssignmentMissingDBConnectionException, self).__init__(message)
