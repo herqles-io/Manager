@@ -2,6 +2,11 @@
 
 The Manager is the task routing, security and management component of the Herqles system.
 
+# Version 2.0
+
+This version is a compelte rewrite and is not compatible with older versions. 
+Please use caution when upgrading.
+
 ## Requirements
 
 * A SQL Server
